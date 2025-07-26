@@ -1,0 +1,14 @@
+{
+  "type": "service_account",
+  "project_id": "healthy-wares-340911",
+  "private_key_id": "d04aa996a851487183c55ae3ceb099a2f93138e8",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQD1ZI0BaDxmfB+m\nR5WD6UOhtlDJv+EQ9MyLirQe57jTV+UD5ErXdhXsP8umlwLFCMStvKUrbUE0zoW7\na0qDLMMyDc9Vf9lLdn8mFTWG4satDVARIpmauhRAMztMc7u4XkvE9pG95CkovrF4\nmPLxQhhKKXi/4F26NY2AILXV3/TvlDH03acX/XN4TH06lyXyUGANBZ0IjAZ1AubB\n5wDQLmIacHiv/KdWcjwxrqMi3i1mNkYTg16MfUy7HLGQ1/iS5u85AAjjPfsR9iky\nL0tnyq8OCHyjImnlEUEMihTBv86s3WocJFrXEYX2RZWRqVKY2q8v8KKc0Trrsi+1\nQvvXBnpfAgMBAAECggEARthDLzNRMMNH/eDvxPgMqvywITbQuuz5upWOP9flT7qx\n5ug7RS4V0TFv0YYKaikIYyIxyzJNH3o6OKwWhH1hUyuSfpwc90DcH3oDDJCfDCnq\nQjAriXSMUSaZSY6mFOnAVTpcRCbBTT6UjP0XMljDG3ISps6XMKGyWtnWtUrlc17U\nOoHpgjf1Kk34mtmjBytarS9sWr7RR/DDsWYIGBgqzr1rK+uL7M4q310aBnMu1mmt\nN4dts/2WVLrw4Mmk7DY6qOe3Qb/IUhhYv/7OxJYkLbXu/Ps4UcuPo4mU1GrHN1SM\ngNyHdS4dDtj6wCAFnwBaWIl3xmTeHsmrJxS9f7KCDQKBgQD+ZzWCCfHyaqm6hxWx\nmnAxo/V3HyUqvAVze77SnzrhhOvHv5azH8gjBD/uaBIt2gbnQeELKx6kclReAHKn\nmYldhh3zp/+/70wxI+ebby1dyRk3mZu9yQvwBYgE8Aks6YQr5LqJ/bc558xVyiSm\nbhivsiTHXFQcZBHaWSPGHyA/HQKBgQD27t0DoGHgV/Zu4iemFVCj9E8MxuPzyh5o\nhaNYyia1glKRwrsFYq8b4hNnr/13xsqU2W6tazdELRUTWJ3nZ+fug8ktoIRPa0Is\nYueNEjjKX8wrXVfryiMTybTAYEYgKx2ajiDqwbiZnNv1Rft1XLt4whfPsutX+HcP\nYLXLUSL6qwKBgC/l2LIyEyaUJH6k/lWhASyndQjHiWThX5ldnBDlv91D/GxwSvxQ\nqIrHOw408+9EFHan9an3pV5K1E2agfvCMZW1MaB1afaGJG9AFlQye3Uj7qaEOkli\nN+gp8nETjHazRJpLB0ABz+SMGvGwDHR1WBqETN5oKMHrqVzV2aFsrNKVAoGBAMl9\nNtKSt8q7e9YWq4uVsOtXmnkugSqYLh/Ti+oTaWqKIJ3Xa4uFbqUt3++nZwepKfwz\nP2A6MCptLtlOYepEmrfAyRN1+wBi4Oge/BncWIKpkIuB6w/3LJAk8lxXMmFlTQ6k\nEq/7yoltuP12USz+sepjVdKgh/CMSXo+y5hPaF9pAoGBANfKQ//g8UXRKNb6wxhp\nPSDHpsOi9FqjNEkQGFaQhMG34B65fnr8hEiJQ23aiTAHOoFXvDli5YJ62C/waKfQ\naV2296aiZg+jSEJ0SsR9fev8OQ1iOn34trWhxYEe34du8CInk0N2UGDrx3Am+BlS\nvjRaS4MX5+KVwMcqF39yzh2E\n-----END PRIVATE KEY-----\n",
+  "client_email": "hackathon@healthy-wares-340911.iam.gserviceaccount.com",
+  "client_id": "107102423844748073114",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/hackathon%40healthy-wares-340911.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
+

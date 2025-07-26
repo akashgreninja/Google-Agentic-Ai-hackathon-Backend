@@ -11,6 +11,8 @@ import math
 from firebase_admin import messaging
 from geopy.distance import geodesic
 from datetime import datetime, timedelta, timezone
+from ai_helpers.process_and_check_dup import process_incident 
+
 class GeminiCityAnalyzer:
     def __init__(self):
         self.client = genai.Client(api_key="")
@@ -174,7 +176,8 @@ Only return clean JSON. Do not include markdown or extra explanation.
                 except Exception as e:
                     # If flood analysis fails, skip
                     pass
-
+            print(f"Incident analyzed successfully: {incident_data}")
+            print(process_incident(incident_data))
             # 🔽 Step 5: Deduplication check
             fifteen_minutes_ago = timestamp - timedelta(minutes=15)
             incidents_ref = self.db.collection("bangalore").document("incidents").collection("all")
@@ -199,6 +202,8 @@ Only return clean JSON. Do not include markdown or extra explanation.
 
                 if ts < fifteen_minutes_ago:
                     continue
+                
+
 
                 distance_km = self.haversine(lat, lng, loc["lat"], loc["lng"])
                 if distance_km <= 0.1:  # Within 100 meters

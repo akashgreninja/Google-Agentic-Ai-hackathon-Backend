@@ -10,6 +10,7 @@ def test_send_location_based_alert():
         "severity": "Medium",
         "location": {"lat": 12.9728512, "lng": 77.6011776},
         "timestamp": "2025-07-21T12:00:00Z",
+        "body": "A big tree has fallen on the road causing a blockage. Please avoid the area. ",
     }
 
     # Area name for the incident

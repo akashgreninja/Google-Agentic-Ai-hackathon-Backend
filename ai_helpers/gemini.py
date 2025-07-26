@@ -33,12 +33,15 @@ class GeminiCityAnalyzer:
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return R * c  # Distance in km
 
+
     def analyze_incident(self, image_url: str, lat: float, lng: float, area: str) -> dict:
         """
         Analyze an incident from an image or video URL. If the URL is a video (e.g., ends with .mp4), upload and process as video, otherwise as image.
+        If the detected category is 'Flood', fetch 4 Street View images and make a second Gemini call to estimate flood severity and road passability.
         """
-        is_video = image_url.lower().endswith('.mp4')
-        is_video = True  # For testing purposes, always treat as video
+        import tempfile
+        GOOGLE_STREETVIEW_API_KEY = "AIzaSyAu2nd80Da5EOqc97CAVG8Hgm5GFCoK6Bw"
+        headings = [0, 90, 180, 270]
         try:
             file_response = requests.get(image_url)
             file_response.raise_for_status()
@@ -46,9 +49,10 @@ class GeminiCityAnalyzer:
         except Exception as e:
             return {"error": f"Failed to fetch file: {str(e)}"}
 
+        is_video = image_url.lower().endswith('.mp4')
+        result = None
+        # --- Video branch ---
         if is_video:
-            # 🔽 Step 2: Upload video to Gemini
-            import tempfile
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_vid:
                 tmp_vid.write(file_bytes)
                 tmp_vid.flush()
@@ -58,7 +62,6 @@ class GeminiCityAnalyzer:
             except Exception as e:
                 return {"error": f"Failed to upload video to Gemini: {str(e)}"}
 
-            # 🔽 Step 3: Gemini video prompt
             prompt = (
                 "Summarize this video. Then create a quiz with an answer key based on the information in this video. "
                 f"Also, classify the event as per the following categories: ['Flood', 'Pothole', 'Power Cut', 'Road Block', 'Accident', 'Fire', 'Flash Mob', 'Garbage', 'Tree Fall', 'Stampede', 'Other', "
@@ -74,9 +77,8 @@ class GeminiCityAnalyzer:
             except Exception as e:
                 return {"error": f"Gemini API failed (video): {str(e)}"}
         else:
-            # 🔽 Step 2: Prepare image part
+            # --- Image branch ---
             image_part = types.Part.from_bytes(data=file_bytes, mime_type="image/jpeg")
-            # 🔽 Step 3: Prompt
             prompt = f"""
 You are a city AI safety assistant analyzing civic incidents from citizen-submitted photos in Bengaluru. Your job is to classify events such as floods, accidents, stampedes, power outages, fire incidents, garbage accumulation, potholes, etc., and return a structured report.
 Analyze the attached photo. Based on visible context, determine:
@@ -121,6 +123,56 @@ Only return clean JSON. Do not include markdown or extra explanation.
             category = incident_data.get("category")
             timestamp = datetime.utcnow()
             incident_data["timestamp"] = timestamp
+
+            # If category is Flood, fetch street view images and make a second Gemini call for flood analysis
+            if category and category.lower() == "flood" or category.lower() == "waterlogging":
+                import os
+                streetview_parts = []
+                log_dir = os.path.join(os.path.dirname(__file__), '..', 'streetview_logs')
+                os.makedirs(log_dir, exist_ok=True)
+                for heading in headings:
+                    sv_url = (
+                        f"https://maps.googleapis.com/maps/api/streetview?size=400x400&location={lat},{lng}"
+                        f"&fov=80&heading={heading}&pitch=0&key={GOOGLE_STREETVIEW_API_KEY}"
+                    )
+                    try:
+                        sv_resp = requests.get(sv_url)
+                        sv_resp.raise_for_status()
+                        sv_bytes = sv_resp.content
+                        # Log the image to a folder for debugging
+                        timestamp_str = datetime.utcnow().strftime('%Y%m%dT%H%M%S')
+                        filename = f"streetview_{lat}_{lng}_heading{heading}_{timestamp_str}.jpg"
+                        filepath = os.path.join(log_dir, filename)
+                        with open(filepath, 'wb') as f:
+                            f.write(sv_bytes)
+                        streetview_parts.append(types.Part.from_bytes(data=sv_bytes, mime_type="image/jpeg"))
+                    except Exception as e:
+                        print(f"Failed to fetch or save Street View image for heading {heading}: {e}")
+                        continue
+                flood_prompt = f"""
+You are a city AI safety assistant. Compare the attached incident photo (first image) with the 4 Google Street View images (next 4 images) of the same location. Estimate:
+- The flood water level (e.g., "ankle deep", "knee deep", "waist deep", "impassable")
+- Whether the road is passable for cars, bikes, or pedestrians
+Return ONLY this exact JSON format:
+{{
+  "flood_level": "...",
+  "road_passable": "..."
+}}
+Only return clean JSON. Do not include markdown or extra explanation.
+"""
+                gemini_inputs = [types.Part.from_bytes(data=file_bytes, mime_type="image/jpeg")] + streetview_parts + [flood_prompt]
+                try:
+                    flood_response = self.client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=gemini_inputs
+                    )
+                    flood_result = json.loads(flood_response.text)
+                    print(f"Flood analysis result: {flood_result}")
+                    if isinstance(flood_result, dict):
+                        incident_data.update(flood_result)
+                except Exception as e:
+                    # If flood analysis fails, skip
+                    pass
 
             # 🔽 Step 5: Deduplication check
             fifteen_minutes_ago = timestamp - timedelta(minutes=15)
@@ -167,7 +219,13 @@ Only return clean JSON. Do not include markdown or extra explanation.
                         # Save new duplicate
                         duplicates_ref.add(incident_data)
                     print(f"Duplicate incident detected: {category} at {loc['lat']}, {loc['lng']} - Count: {count}")
-                    return {"success": "True"}
+                    return {
+                        "success": False,
+                        "reason": "Duplicate incident detected within 100 meters and 15 minutes.",
+                        "category": category,
+                        "location": loc,
+                        "count": count
+                    }
 
             # 🔽 Step 6: Save new unique incident
             doc_ref = incidents_ref.document()
@@ -226,7 +284,7 @@ Only return clean JSON. Do not include markdown or extra explanation.
                 summary_prompt = (
                     f"There were {summary_str} reported in {area} in the last 2 hours. "
                     "Summarize this for a city alert. Mention if roads are expected to be congested or if there are any safety advisories. "
-                    "Return a short, clear, human-friendly summary for a push notification."
+                    "Return ONLY ONE short, clear, human-friendly summary for a push notification. Do NOT include multiple outputs, explanations, or markdown."
                 )
                 try:
                     gemini_response = self.client.models.generate_content(

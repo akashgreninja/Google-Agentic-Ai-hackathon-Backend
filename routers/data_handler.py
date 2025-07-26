@@ -67,7 +67,7 @@ async def report_incident(payload: IncidentInput, background_tasks: BackgroundTa
         area=payload.area   
     )
     # If incident was successfully analyzed and saved, run alert in background
-    if result.get("success"):
+    if result.get("success") and "data" in result:
         background_tasks.add_task(analyzer.send_location_based_alert, payload.area, result["data"])
     return result
 
@@ -195,3 +195,19 @@ async def agentic_predictive_route(
 #         return {"duplicate": is_dup}
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=f"Error checking duplicate: {e}")
+# curl -X GET "http://127.0.0.1:8000/data/get_relevant_incidents_summary?lat=12.9121&lng=77.6446&radius_km=1&user_id=abc@example.com"
+@router.get("/get_relevant_incidents_summary")
+async def get_relevant_incidents_summary(
+    lat: float = None,
+    lng: float = None,
+    user_id: str = None,
+    radius_km: float = 10
+):
+    try:
+        getter = GeminiCityDataGetter()
+        user_location = (lat, lng) if lat is not None and lng is not None else None
+        result = getter.get_relevant_incidents_summary(user_id=user_id, user_location=user_location, radius_km=radius_km)
+        return result
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}

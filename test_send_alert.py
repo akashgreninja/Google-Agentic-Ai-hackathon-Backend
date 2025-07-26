@@ -6,9 +6,9 @@ def test_send_location_based_alert():
     # Simulated incident data
     incident_data = {
         "category": "Accident",
-        "summary": "A minor accident occurred.",
+        "summary": "A big tree has fallen on the road causing a blockage.",
         "severity": "Medium",
-        "location": {"lat": 12.9121, "lng": 77.6446},
+        "location": {"lat": 12.9728512, "lng": 77.6011776},
         "timestamp": "2025-07-21T12:00:00Z",
     }
 

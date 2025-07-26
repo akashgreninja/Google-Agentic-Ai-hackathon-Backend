@@ -1,3 +1,11 @@
+# Removed stray email line
+from fastapi import Body
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+
+
 from fastapi import APIRouter, UploadFile, File, Form
 from google import genai
 from ai_helpers.gemini import GeminiCityAnalyzer
@@ -9,6 +17,7 @@ from pydantic import BaseModel, EmailStr
 from fastapi import HTTPException
 from firebase_admin import firestore
 from fastapi import BackgroundTasks, Request
+import json
 # from gemini_deduplicator import is_duplicate_incident  
 from typing import Dict
 
@@ -42,15 +51,6 @@ class UserInterestsInput(BaseModel):
     interests: list[str]
 
 
-
-
-# curl http://127.0.0.1:8000/data/get_data
-@router.get("/get_data")
-async def get_data_endpoint():
-    """
-    Handles GET requests to retrieve data.
-    """
-    return {"message": "This is your GET data endpoint!"}
 
 
 
@@ -211,3 +211,127 @@ async def get_relevant_incidents_summary(
     except Exception as e:
         import traceback
         return {"error": str(e), "trace": traceback.format_exc()}
+    
+
+
+class PlaceRequest(BaseModel):
+    place: str
+
+@router.post("/get_latlng_for_place")
+async def get_latlng_for_place(req: PlaceRequest):
+    """
+    Given a place name, use Gemini to return the accurate latitude and longitude.
+    Accepts JSON body: {"place": "city_name"}
+    """
+    prompt = (
+        f"You are a geocoding assistant. Given the place name: '{req.place}', return ONLY the accurate latitude and longitude as a JSON object in this format: {{'lat': ..., 'lng': ...}}. Do not include any explanation, markdown, or extra text."
+    )
+
+    client = genai.Client()
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt]
+        )
+        text = response.text.strip().replace("'", '"')
+        latlng = json.loads(text)
+        return latlng
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Send to Authority Endpoint ---
+
+class SendAuthorityRequest(BaseModel):
+    to_email: EmailStr = None  # Optional, can be determined by AI
+    subject: str
+    message: str
+
+
+import os
+
+@router.post("/send_to_authority")
+async def send_to_authority(req: SendAuthorityRequest):
+    """
+    Sends an email to the specified authority with the given subject and message using Gmail SMTP.
+    Set environment variables GMAIL_USER and GMAIL_APP_PASSWORD before running.
+    Request body: {"to_email": ..., "subject": ..., "message": ...}
+    """
+    sender_email = "akashuhulekal@gmail.com"
+    app_password = "utef njxq uyxy azvm"
+    orig_subject = req.subject
+    orig_body = req.message
+
+    if not sender_email or not app_password:
+        return {"error": "GMAIL_USER and GMAIL_APP_PASSWORD environment variables must be set."}
+
+    # If to_email is not provided, use Gemini to determine the best authority
+    receiver_email = req.to_email
+    ai_reason = None
+    if not receiver_email:
+        try:
+            from google import genai
+            client = genai.Client()
+            prompt = (
+                f"Given the following email subject and body, suggest the best authority email to send this to. "
+                f"Choose from: ['police@city.gov', 'fire@city.gov', 'flood@city.gov', 'municipal@city.gov', 'traffic@city.gov', 'health@city.gov'] "
+                f"\nSubject: {orig_subject}\nBody: {orig_body}\n"
+                f"Return ONLY a JSON object: {{'to_email': ...}}."
+            )
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[prompt]
+            )
+            import json as _json
+            text = response.text.strip().replace("'", '"')
+            ai_result = _json.loads(text)
+            receiver_email = ai_result.get("to_email")
+            ai_reason = "Determined by Gemini based on subject and message."
+        except Exception as e:
+            return {"error": f"Could not determine authority email: {str(e)}"}
+
+    # Use Gemini to rewrite the subject and body for clarity and professionalism
+    try:
+        from google import genai
+        client = genai.Client()
+        prompt = (
+            f"Rewrite the following email subject and body to be clear, concise, and professional for a civic authority. "
+            f"\nSubject: {orig_subject}\nBody: {orig_body}\n"
+            f"Return ONLY a JSON object: {{'subject': ..., 'body': ...}}."
+        )
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt]
+        )
+        import json as _json
+        text = response.text.strip().replace("'", '"')
+        improved = _json.loads(text)
+        subject = improved.get("subject", orig_subject)
+        body = improved.get("body", orig_body)
+    except Exception as e:
+        # If Gemini fails, fall back to original
+        subject = orig_subject
+        body = orig_body
+
+    msg = MIMEMultipart()
+    msg["From"] = sender_email
+    msg["To"] = receiver_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(sender_email, app_password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+        return {"success": True, "sent_to": receiver_email, "subject": subject, "body": body, "ai_reason": ai_reason}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
+
+
+

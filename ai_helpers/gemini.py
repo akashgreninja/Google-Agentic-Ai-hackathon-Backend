@@ -8,8 +8,9 @@ from google.cloud.firestore_v1 import GeoPoint
 import json
 import requests
 import math
+from firebase_admin import messaging
 from geopy.distance import geodesic
-
+from datetime import datetime, timedelta, timezone
 class GeminiCityAnalyzer:
     def __init__(self):
         self.client = genai.Client(api_key="")
@@ -245,10 +246,11 @@ Only return clean JSON. Do not include markdown or extra explanation.
         Send an FCM push notification to those users using their saved FCM tokens.
         Additionally, aggregate incidents in the last 2 hours and summarize using Gemini.
         """
-        from firebase_admin import messaging
+        
         try:
             # Step 1: Query incidents in the last 2 hours for the same area
-            now = datetime.utcnow()
+            # Use offset-naive UTC datetimes for all comparisons
+            now = datetime.utcnow().replace(tzinfo=None)
             two_hours_ago = now - timedelta(hours=2)
             incidents_ref = self.db.collection("bangalore").document("incidents").collection("all")
             # Get all incidents in the last 2 hours
@@ -258,11 +260,15 @@ Only return clean JSON. Do not include markdown or extra explanation.
                 ts = inc.get("timestamp")
                 inc_area = inc.get("area", "")
                 # Convert Firestore timestamp or string to offset-naive UTC datetime
+                # Normalize all timestamps to offset-naive UTC for comparison
                 if hasattr(ts, 'astimezone'):
                     ts = ts.astimezone(tz=None).replace(tzinfo=None)
                 elif isinstance(ts, str):
                     try:
+                        # Remove Z and parse as UTC, then make offset-naive
                         ts = datetime.fromisoformat(ts.replace("Z", ""))
+                        if ts.tzinfo is not None:
+                            ts = ts.astimezone(tz=None).replace(tzinfo=None)
                     except Exception:
                         continue
                 if ts and ts >= two_hours_ago and inc_area.lower() == area.lower():

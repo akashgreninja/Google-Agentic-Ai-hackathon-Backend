@@ -7,43 +7,6 @@ from google import genai
 
 
 class GeminiCityDataGetter:
-
-    def get_relevant_incidents_summary(
-        self,
-        user_id: str = None,
-        user_location: Tuple[float, float] = None,
-        radius_km: float = 10
-    ) -> Dict:
-        """
-        Fetches relevant incidents and returns a 7-8 line actionable summary for the user, prioritizing their interests and priority categories.
-        """
-        incidents = self.get_relevant_incidents(user_id=user_id, user_location=user_location, radius_km=radius_km)
-        if not incidents:
-            return {"summary": "No relevant incidents found in your area."}
-
-        # Prepare a prompt for Gemini to summarize all incidents in 7-8 actionable lines
-        pre_prompt = (
-            "You are a smart civic assistant. Given the following incident reports, write a 6-7 line summary with actionable advice for the user. "
-            "Prioritize incidents in these categories: Flood, Power Cut, Road Block, Accident, Fire, Flash Mob, Garbage, Tree Fall, Stampede, and also prioritize the user's subscribed/interested categories if provided. "
-            "For each line, mention the area, category, and a short actionable suggestion (e.g., avoid, seek shelter, expect delays, etc). "
-            "Do NOT include markdown, explanations, or extra formatting. Just return the summary as plain text.\n\n"
-            "Incident Reports:\n" +
-            "\n".join([
-                f"Category: {inc.get('category', 'Unknown')}, Area: {inc.get('area', 'Unknown Area')}, Severity: {inc.get('severity', 'Unknown')}, Summary: {inc.get('summary', '')}" for inc in incidents
-            ]) +
-            "\n\nOutput:"
-        )
-
-        client = genai.Client(api_key=os.getenv("GENAI_API_KEY"))
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[pre_prompt]
-            )
-            summary = response.text.strip()
-        except Exception as e:
-            summary = "Could not generate summary due to an error."
-        return {"summary": summary, "incidents": incidents}
     def __init__(self):
         if not firebase_admin._apps:
             cred = credentials.Certificate("./firebasekey.json")
@@ -137,7 +100,7 @@ class GeminiCityDataGetter:
         # Add AI-generated titles to each incident
         if all_incidents:
             pre_prompt = (
-                "You are a smart civic assistant. For each of the following incident reports, generate a short, informative **title** summarizing the issue. "
+                "You are a smart civic assistant. For each of the following incident reports, generate a max 40-50 words, informative **title** summarizing the issue. "
                 "Base it on severity (like 'Fire' > 'Garbage'), category, area, and count. "
                 "Return a JSON list of titles, matching the order of incidents given. DO NOT include anything else.\n\n"
                 "Examples:\n"

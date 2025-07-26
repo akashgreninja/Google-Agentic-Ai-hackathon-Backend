@@ -276,7 +276,7 @@ async def send_to_authority(req: SendAuthorityRequest):
             client = genai.Client()
             prompt = (
                 f"Given the following email subject and body, suggest the best authority email to send this to. "
-                f"Choose from: ['police@city.gov', 'fire@city.gov', 'flood@city.gov', 'municipal@city.gov', 'traffic@city.gov', 'health@city.gov'] "
+                f"send to : ['akashuhulekal@gmail.com'] "
                 f"\nSubject: {orig_subject}\nBody: {orig_body}\n"
                 f"Return ONLY a JSON object: {{'to_email': ...}}."
             )

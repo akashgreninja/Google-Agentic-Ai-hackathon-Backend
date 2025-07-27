@@ -3,6 +3,8 @@ from fastapi import Body
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
 
 
@@ -23,13 +25,18 @@ from typing import Dict
 
 router = APIRouter()
 analyzer = GeminiCityAnalyzer()
-
+load_dotenv()
 
 class IncidentInput(BaseModel):
     lat: float
     lng: float
     image_url: str
     area: str
+
+class SendAuthorityRequest(BaseModel):
+    to_email: EmailStr = None  # Optional, can be determined by AI
+    subject: str
+    message: str
 
 
 class UserRegisterInput(BaseModel):
@@ -51,8 +58,14 @@ class UserInterestsInput(BaseModel):
     interests: list[str]
 
 
+class PlaceRequest(BaseModel):
+    place: str
 
 
+class UpdateInterestInput(BaseModel):
+    email: EmailStr
+    category: str
+    action: str | int  # can be 'add', 'remove', or an integer (e.g., -1)
 
 
 # curl -X POST http://127.0.0.1:8000/data/incident/report \
@@ -70,6 +83,8 @@ async def report_incident(payload: IncidentInput, background_tasks: BackgroundTa
     if result.get("success") and "data" in result:
         background_tasks.add_task(analyzer.send_location_based_alert, payload.area, result["data"])
     return result
+
+
 
 
 # curl -X GET "http://127.0.0.1:8000/data/get_incidents_by_route?source_lat=12.9121&source_lng=77.6446&dest_lat=12.9784&dest_lng=77.6408"
@@ -134,68 +149,79 @@ async def register_user(user: UserRegisterInput):
 # curl -X POST http://127.0.0.1:8000/data/login \
 # -H "Content-Type: application/json" \
 # -d '{"email": "john@example.com", "password": "secret"}'
-@router.post("/login")
-async def login_user(user: UserLoginInput):
-    db = firestore.client()
-    users_ref = db.collection("users")
-    doc = users_ref.document(user.email).get()
-    if not doc.exists:
-        raise HTTPException(status_code=401, detail="Invalid credentials.")
-    user_data = doc.to_dict()
-    # Password check is skipped for demo; add real password check in production
-    user_data.pop("password", None)
-    return {"message": "Login successful.", "user": user_data}
 
-
-# curl -X POST http://127.0.0.1:8000/data/update_interests \
-# -H "Content-Type: application/json" \
-# -d '{"email": "john@example.com", "interests": ["Flood", "Fire", "Accident"]}'
 @router.post("/update_interests")
-async def update_user_interests(data: UserInterestsInput):
+async def update_user_interests(data: UpdateInterestInput):
+
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("update_user_interests")
+
     db = firestore.client()
     users_ref = db.collection("users")
     doc_ref = users_ref.document(data.email)
     doc = doc_ref.get()
     if not doc.exists:
+        logger.error(f"User not found: {data.email}")
         raise HTTPException(status_code=404, detail="User not found.")
-    doc_ref.update({"interests": data.interests})
-    return {"message": "User interests updated successfully.", "email": data.email, "interests": data.interests}
+
+    user_data = doc.to_dict()
+    interests = user_data.get("interests", {})
+    logger.info(f"Original interests: {interests}")
+
+    # Convert legacy list to dict
+    if isinstance(interests, list):
+        interests = {cat: {"count": 1, "last_updated": datetime.utcnow().isoformat()} for cat in interests}
+        logger.info(f"Converted legacy interests to dict: {interests}")
+
+    now = datetime.utcnow()
+    threshold = now - timedelta(days=30)  # 30 days threshold
+
+    # Remove interests not updated within threshold
+    interests = {
+        cat: val for cat, val in interests.items()
+        if datetime.fromisoformat(val.get("last_updated", now.isoformat())) >= threshold
+    }
+    logger.info(f"Filtered interests (within threshold): {interests}")
+
+    cat = data.category
+    action = data.action
+    logger.info(f"Action received: {action} for category: {cat}")
+    if isinstance(action, int):
+        # Only allow +1 or -1
+        if action not in [1, -1]:
+            logger.error(f"Invalid integer action: {action}. Only +1 or -1 allowed.")
+            raise HTTPException(status_code=400, detail="Integer action must be +1 or -1.")
+        if cat in interests:
+            interests[cat]["count"] += action
+            interests[cat]["last_updated"] = now.isoformat()
+            if interests[cat]["count"] <= 0:
+                interests.pop(cat)
+        elif action == 1:
+            interests[cat] = {"count": 1, "last_updated": now.isoformat()}
+    elif action == "add":
+        if cat in interests:
+            interests[cat]["count"] += 1
+        else:
+            interests[cat] = {"count": 1, "last_updated": now.isoformat()}
+        interests[cat]["last_updated"] = now.isoformat()
+    elif action == "remove":
+        if cat in interests:
+            interests[cat]["count"] -= 1
+            interests[cat]["last_updated"] = now.isoformat()
+            if interests[cat]["count"] <= 0:
+                interests.pop(cat)
+    else:
+        logger.error(f"Invalid action: {action}")
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'add', 'remove', or an integer.")
+
+    logger.info(f"Updated interests: {interests}")
+    # Save back to Firestore
+    doc_ref.update({"interests": interests})
+    return {"success": True, "interests": interests}
 
 
-# curl -X GET "http://127.0.0.1:8000/data/agentic_predictive_layer?lat=12.9121&lng=77.6446&radius_km=1"
-@router.get("/predictive_layer_for_current_location")
-async def agentic_predictive_layer(lat: float = None, lng: float = None, radius_km: float = 10):
-    getter = GeminiCityDataGetter()
-    user_location = (lat, lng) if lat is not None and lng is not None else None
-    incidents = getter.get_relevant_incidents(user_location=user_location, radius_km=radius_km)
-    analysis = getter.agentic_predictive_analysis(incidents)
-    return {"analysis": analysis, "incidents": incidents}
 
-
-# curl -X GET "http://127.0.0.1:8000/data/agentic_predictive_route?source_lat=12.9121&source_lng=77.6446&dest_lat=12.9784&dest_lng=77.6408"
-@router.get("/predictive_layer_for_route")
-async def agentic_predictive_route(
-    source_lat: float,
-    source_lng: float,
-    dest_lat: float,
-    dest_lng: float
-):
-    getter = GeminiCityDataGetter()
-    incidents = getter.get_incidents_along_route(source_lat, source_lng, dest_lat, dest_lng)
-    analysis = getter.agentic_predictive_analysis(incidents)
-    return {"analysis": analysis, "incidents": incidents}
-
-
-
-# @router.post("/check_duplicate")
-# async def check_duplicate_incident(incident: Request) -> Dict[str, bool]:
-#     try:
-#         data = await incident.json()
-#         is_dup = is_duplicate_incident(data)
-#         return {"duplicate": is_dup}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error checking duplicate: {e}")
-# curl -X GET "http://127.0.0.1:8000/data/get_relevant_incidents_summary?lat=12.9121&lng=77.6446&radius_km=1&user_id=abc@example.com"
 @router.get("/get_relevant_incidents_summary")
 async def get_relevant_incidents_summary(
     lat: float = None,
@@ -214,8 +240,7 @@ async def get_relevant_incidents_summary(
     
 
 
-class PlaceRequest(BaseModel):
-    place: str
+
 
 @router.post("/get_latlng_for_place")
 async def get_latlng_for_place(req: PlaceRequest):
@@ -242,15 +267,6 @@ async def get_latlng_for_place(req: PlaceRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- Send to Authority Endpoint ---
-
-class SendAuthorityRequest(BaseModel):
-    to_email: EmailStr = None  # Optional, can be determined by AI
-    subject: str
-    message: str
-
-
-import os
 
 @router.post("/send_to_authority")
 async def send_to_authority(req: SendAuthorityRequest):
@@ -259,8 +275,9 @@ async def send_to_authority(req: SendAuthorityRequest):
     Set environment variables GMAIL_USER and GMAIL_APP_PASSWORD before running.
     Request body: {"to_email": ..., "subject": ..., "message": ...}
     """
-    sender_email = "akashuhulekal@gmail.com"
-    app_password = "utef njxq uyxy azvm"
+    import os
+    sender_email = os.environ.get("GMAIL_USER")
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
     orig_subject = req.subject
     orig_body = req.message
 

@@ -1,4 +1,5 @@
 import firebase_admin
+from dotenv import load_dotenv
 import os 
 from firebase_admin import credentials, firestore
 from google import genai
@@ -13,9 +14,9 @@ from geopy.distance import geodesic
 from datetime import datetime, timedelta, timezone
 class GeminiCityAnalyzer:
     def __init__(self):
-        self.client = genai.Client(api_key="")
+        load_dotenv()
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
         key_path = os.path.join(os.path.dirname(__file__), '..', 'firebasekey.json')
-        
         if not firebase_admin._apps:
             cred = credentials.Certificate(os.path.abspath(key_path))
             firebase_admin.initialize_app(cred)

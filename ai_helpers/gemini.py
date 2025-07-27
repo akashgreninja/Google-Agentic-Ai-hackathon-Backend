@@ -12,6 +12,7 @@ import math
 from firebase_admin import messaging
 from geopy.distance import geodesic
 from datetime import datetime, timedelta, timezone
+from vector.process_and_check_dup import process_incident
 class GeminiCityAnalyzer:
     def __init__(self):
         load_dotenv()
@@ -176,7 +177,12 @@ Only return clean JSON. Do not include markdown or extra explanation.
                     # If flood analysis fails, skip
                     pass
 
-            # 🔽 Step 5: Deduplication check
+            is_duplicate = process_incident(incident_data)
+            if is_duplicate:
+                print(f"Duplicate incident detected: {incident_data.get('summary', 'No summary')}") 
+            else:
+                print(f"New incident processed: {incident_data.get('summary', 'No summary')}")
+                
             fifteen_minutes_ago = timestamp - timedelta(minutes=15)
             incidents_ref = self.db.collection("bangalore").document("incidents").collection("all")
             recent_snapshots = incidents_ref.where("category", "==", category).stream()

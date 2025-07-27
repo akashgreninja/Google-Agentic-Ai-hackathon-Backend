@@ -40,9 +40,11 @@ class GeminiCityDataGetter:
 
         def interest_priority(category):
             if not interests:
-                return float('inf')  # If no interests, deprioritize
+                return float('inf')
             try:
+                print(f"Interests: {interests}, Category: {category}")
                 return interests.index(category)
+            
             except ValueError:
                 return float('inf')
 

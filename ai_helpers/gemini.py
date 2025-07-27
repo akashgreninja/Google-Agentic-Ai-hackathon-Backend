@@ -43,7 +43,7 @@ class GeminiCityAnalyzer:
         If the detected category is 'Flood', fetch 4 Street View images and make a second Gemini call to estimate flood severity and road passability.
         """
         import tempfile
-        GOOGLE_STREETVIEW_API_KEY = "AIzaSyAu2nd80Da5EOqc97CAVG8Hgm5GFCoK6Bw"
+        GOOGLE_STREETVIEW_API_KEY = os.environ.get("GOOGLE_STREETVIEW_API_KEY", "")
         headings = [0, 90, 180, 270]
         try:
             file_response = requests.get(image_url)
